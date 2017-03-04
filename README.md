@@ -1,2 +1,3 @@
-# SSM-
+# SSM框架读写分离配置
 SSM框架之多数据库、读写分离、一写多读配置
+https://dearas.github.io/2017/03/02/SSM%E6%A1%86%E6%9E%B6%E9%85%8D%E7%BD%AE%E4%B8%80%E8%AF%BB%E5%A4%9A%E5%86%99%E6%95%B0%E6%8D%AE%E5%BA%93%E7%9A%84%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F/
