@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+       http://www.springframework.org/schema/tx
+       http://www.springframework.org/schema/tx/spring-tx-4.1.xsd
+       http://www.springframework.org/schema/aop
+       http://www.springframework.org/schema/aop/spring-aop-4.1.xsd">
+
+    <bean id="abstractDataSource" abstract="true" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 配置获取连接等待超时的时间 -->
+        <property name="maxWait" value="60000"/>
+        <!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->
+        <property name="timeBetweenEvictionRunsMillis" value="60000"/>
+        <!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->
+        <property name="minEvictableIdleTimeMillis" value="300000"/>
+        <property name="validationQuery" value="SELECT 'x'"/>
+        <property name="testWhileIdle" value="true"/>
+        <property name="testOnBorrow" value="false"/>
+        <property name="testOnReturn" value="false"/>
+        <!-- 打开PSCache，并且指定每个连接上PSCache的大小 -->
+        <property name="poolPreparedStatements" value="true"/>
+        <property name="maxPoolPreparedStatementPerConnectionSize" value="20"/>
+        <property name="filters" value="config"/>
+        <property name="connectionProperties" value="config.decrypt=true" />
+    </bean>
+
+    <bean id="dataSourceRead1" parent="abstractDataSource">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${read1.jdbc.url}"/>
+        <property name="username" value="${read1.jdbc.user}"/>
+        <property name="password" value="${read1.jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${read1.jdbc.initPoolSize}"/>
+        <property name="minIdle" value="${read1.jdbc.minPoolSize}"/>
+        <property name="maxActive" value="${read1.jdbc.maxPoolSize}"/>
+    </bean>
+
+    <bean id="dataSourceRead2" parent="abstractDataSource">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${read2.jdbc.url}"/>
+        <property name="username" value="${read2.jdbc.user}"/>
+        <property name="password" value="${read2.jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${read2.jdbc.initPoolSize}"/>
+        <property name="minIdle" value="${read2.jdbc.minPoolSize}"/>
+        <property name="maxActive" value="${read2.jdbc.maxPoolSize}"/>
+    </bean>
+
+    <bean id="dataSourceWrite" parent="abstractDataSource">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${write.jdbc.url}"/>
+        <property name="username" value="${write.jdbc.user}"/>
+        <property name="password" value="${write.jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${write.jdbc.initPoolSize}"/>
+        <property name="minIdle" value="${write.jdbc.minPoolSize}"/>
+        <property name="maxActive" value="${write.jdbc.maxPoolSize}"/>
+    </bean>
+
+    <bean id="dataSource" class="com.test.api.dao.datasource.DynamicRoutingDataSourceProxy">
+        <property name="writeDataSource" ref="dataSourceWrite" />
+        <property name="readDataSources">
+            <list>
+                <ref bean="dataSourceRead1" />
+                <ref bean="dataSourceRead2" />
+            </list>
+        </property>
+        <!--轮询方式-->
+        <property name="readDataSourcePollPattern" value="1" />
+    </bean>
+
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <!-- 针对myBatis的配置项 -->
+    <!-- 配置sqlSessionFactory -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!-- 实例化sqlSessionFactory时需要使用上述配置好的数据源以及SQL映射文件 -->
+        <property name="dataSource" ref="dataSource"/>
+        <property name="mapperLocations" value="classpath:mapper/*.xml"/>
+        <property name="configLocation" value="classpath:mybatis-plugin-config.xml" />
+    </bean>
+
+    <bean id="sqlSessionTemplate" class="org.mybatis.spring.SqlSessionTemplate">
+        <constructor-arg ref="sqlSessionFactory" />
+    </bean>
+    <!-- 通过扫描的模式，扫描目录下所有的mapper， 根据对应的mapper.xml为其生成代理类-->
+    <bean id="mapper" class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.test.api.dao.inte" />
+        <property name="sqlSessionTemplate" ref="sqlSessionTemplate"></property>
+    </bean>
+
+</beans>

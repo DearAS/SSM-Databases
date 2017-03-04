@@ -1,0 +1,31 @@
+要实现读写分离需要确定两点事情：
+    - 根据什么来判断使用读库还是写库。(可以通过方法名、注解、或者事务的readOnly属性等来判断都可以)
+    - 读库写库怎样进行实时切换。
+在java SSM项目中要是写读写分离可以有两种思路：
+    1. 配置两种mybatis的sqlSessionFactory,不同的sqlSessionFactory对应不同的数据源。通过配置这两个sqlSessionFactory的sql映射文件，来使mybatis自动实现读写分离。
+    2. 利用Spring的AOP进行代码的横向切割。在选择声明式事务切入之前就确定好要使用的数据源。
+方式一
+
+需要确定的两点:
+    1.利用sql映射文件xml来判断使用的是读库还是写库。
+    2.每种不同的sqlSessionFactory对应不同的数据源，实现了数据源的切换。
+缺点：代码改动较大，不易维护，不易扩展。
+
+
+方式二
+
+利用Spring的AOP实现数据源的动态切换。利用方法名上打自定义注解的方式来判断具体要使用的数据源(如：@DataSource(value="read"))，然后利用如AbstractRoutingDataSource实现数据源的切换。
+Spring提供了很多实现这一需求的口，如AbstractRoutingDataSource,只要继承了AbstractRoutingDataSource，然后重写determineCurrentLookupKey方法返回数据源的名字即可动态切换数据源。
+在determineCurrentLookupKey()之前就利用切面确定好数据源的名称，可以在在determineCurrentLookupKey()中操作轮询算法实现多读配置。
+
+需要确定的两点:
+    1. 利用方法名上的注解来确定是用读库还是写库。
+    2. 利用Spring提供的重写AbstractRoutingDataSource的determineCurrentLookupKey方法，它返回的是配置文件中的dataSource对应的名称，然后Spring根据不同的名称选取不同的数据源。
+
+
+方式三
+
+利用Spring的AOP实现数据源的动态切换。
+除了可以利用如AbstractRoutingDataSource之外还可以利用AbstractDataSource来重写getConnection()方法，来实现数据源的读写分离和动态切换。
+此方式实现过程可能比较复杂，整体流程分为两个步骤：
+1、容器加载完成之后，配置

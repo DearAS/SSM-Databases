@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+       http://www.springframework.org/schema/tx
+       http://www.springframework.org/schema/tx/spring-tx-4.1.xsd
+       http://www.springframework.org/schema/aop
+       http://www.springframework.org/schema/aop/spring-aop-4.1.xsd">
+
+    <bean id="abstractDataSource" abstract="true" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 配置获取连接等待超时的时间 -->
+        <property name="maxWait" value="60000"/>
+        <!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->
+        <property name="timeBetweenEvictionRunsMillis" value="60000"/>
+        <!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->
+        <property name="minEvictableIdleTimeMillis" value="300000"/>
+        <property name="validationQuery" value="SELECT 'x'"/>
+        <property name="testWhileIdle" value="true"/>
+        <property name="testOnBorrow" value="false"/>
+        <property name="testOnReturn" value="false"/>
+        <!-- 打开PSCache，并且指定每个连接上PSCache的大小 -->
+        <property name="poolPreparedStatements" value="true"/>
+        <property name="maxPoolPreparedStatementPerConnectionSize" value="20"/>
+        <property name="filters" value="config"/>
+        <property name="connectionProperties" value="config.decrypt=true" />
+    </bean>
+
+    <bean id="dataSourceRead1" parent="abstractDataSource">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${read1.jdbc.url}"/>
+        <property name="username" value="${read1.jdbc.user}"/>
+        <property name="password" value="${read1.jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${read1.jdbc.initPoolSize}"/>
+        <property name="minIdle" value="${read1.jdbc.minPoolSize}"/>
+        <property name="maxActive" value="${read1.jdbc.maxPoolSize}"/>
+    </bean>
+
+    <bean id="dataSourceRead2" parent="abstractDataSource">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${read2.jdbc.url}"/>
+        <property name="username" value="${read2.jdbc.user}"/>
+        <property name="password" value="${read2.jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${read2.jdbc.initPoolSize}"/>
+        <property name="minIdle" value="${read2.jdbc.minPoolSize}"/>
+        <property name="maxActive" value="${read2.jdbc.maxPoolSize}"/>
+    </bean>
+
+    <bean id="dataSourceWrite" parent="abstractDataSource">
+        <property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${write.jdbc.url}"/>
+        <property name="username" value="${write.jdbc.user}"/>
+        <property name="password" value="${write.jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${write.jdbc.initPoolSize}"/>
+        <property name="minIdle" value="${write.jdbc.minPoolSize}"/>
+        <property name="maxActive" value="${write.jdbc.maxPoolSize}"/>
+    </bean>
+
+    <bean id="dataSource" class="io.dearas.datasource2.DynamicDataSource">
+        <property name="writeDataSource" ref="dataSourceWrite" />
+        <property name="readDataSources">
+            <list>
+                <ref bean="dataSourceRead1" />
+                <ref bean="dataSourceRead2" />
+            </list>
+        </property>
+        <!--轮询方式 1为轮询，其它为随机-->
+        <property name="readDataSourcePollPattern" value="1" />
+        <property name="defaultTargetDataSource" ref="dataSourceWrite"/>
+    </bean>
+
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <!-- 针对myBatis的配置项 -->
+    <!-- 配置sqlSessionFactory -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!-- 实例化sqlSessionFactory时需要使用上述配置好的数据源以及SQL映射文件 -->
+        <property name="dataSource" ref="dataSource"/>
+        <property name="mapperLocations" value="classpath:mapper/*.xml"/>
+    </bean>
+
+    <!-- 配置扫描器 -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <!-- 扫描包以及它的子包下的所有映射接口类 -->
+        <property name="basePackage" value="com.test.api.dao.inte"/>
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+    </bean>
+
+    <!-- 配置数据库注解aop -->
+    <bean id="dynamicDataSourceAspect" class="io.dearas.datasource2.DynamicDataSourceAspect" />
+    <!--配置事务管理，设置所有的读库为read-only="true" 在数据库切换中通过read-only进行判断是否使用读库 -->
+    <tx:advice id="txAdvice" transaction-manager="transactionManager">
+        <tx:attributes>
+            <tx:method name="save*" propagation="REQUIRED" />
+            <tx:method name="add*" propagation="REQUIRED" />
+            <tx:method name="create*" propagation="REQUIRED" />
+            <tx:method name="insert*" propagation="REQUIRED" />
+            <tx:method name="update*" propagation="REQUIRED" />
+            <tx:method name="merge*" propagation="REQUIRED" />
+            <tx:method name="del*" propagation="REQUIRED" />
+            <tx:method name="remove*" propagation="REQUIRED" />
+
+            <tx:method name="query*" read-only="true"/>
+            <tx:method name="use*" read-only="true"/>
+            <tx:method name="get*" read-only="true" />
+            <tx:method name="count*" read-only="true" />
+            <tx:method name="find*" read-only="true" />
+            <tx:method name="list*" read-only="true" />
+
+            <tx:method name="*" propagation="REQUIRED"/>
+        </tx:attributes>
+    </tx:advice>
+
+    <aop:config expose-proxy="true">
+        <!-- 只对业务逻辑层实施事务 -->
+        <aop:pointcut id="txPointcut" expression="execution(* io.dearas.servie.*(..))" />
+        <aop:advisor advice-ref="txAdvice" pointcut-ref="txPointcut"/>
+
+        <!-- 通过AOP切面实现读/写库选择  order 用于定义与事务的切割顺序，order越小 越先被执行。保证在事务之前就已经进行了数据源的切换-->
+        <aop:aspect id="c" order="-2147483648" ref="dynamicDataSourceAspect">
+            <aop:before pointcut-ref="txPointcut" method="before"/>
+            <aop:after pointcut-ref="txPointcut" method="after"/>
+        </aop:aspect>
+    </aop:config>
+</beans>
